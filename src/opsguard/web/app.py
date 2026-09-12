@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from opsguard.feedback import FeedbackKind
+from opsguard.llm import build_configured_planner
 
 from .service import OpsGuardService
 
@@ -47,13 +48,21 @@ class FeedbackInput(BaseModel):
 def create_app(
     project_root: Path | None = None,
     service: OpsGuardService | None = None,
+    use_configured_model: bool = False,
 ) -> FastAPI:
     app = FastAPI(
         title="OpsGuard",
         version="0.1.0",
         description="Evidence-backed security investigation and rule governance.",
     )
-    runtime = service or OpsGuardService(project_root or DEFAULT_PROJECT_ROOT)
+    root = project_root or DEFAULT_PROJECT_ROOT
+    if service is not None:
+        runtime = service
+    elif use_configured_model:
+        planner, model_status = build_configured_planner(root / ".env")
+        runtime = OpsGuardService(root, planner, model_status)
+    else:
+        runtime = OpsGuardService(root)
     app.state.service = runtime
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -68,6 +77,10 @@ def create_app(
     @app.get("/api/events")
     def events() -> list[dict[str, Any]]:
         return runtime.event_options()
+
+    @app.get("/api/model/status")
+    def model_status() -> dict[str, Any]:
+        return runtime.model_status()
 
     @app.post("/api/investigations")
     def investigate(payload: InvestigationInput) -> dict[str, Any]:
@@ -140,4 +153,4 @@ def create_app(
     return app
 
 
-app = create_app()
+app = create_app(use_configured_model=True)

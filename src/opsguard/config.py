@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-def _read_dotenv(path: Path) -> dict[str, str]:
+def read_dotenv(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
     values: dict[str, str] = {}
@@ -18,7 +18,7 @@ def _read_dotenv(path: Path) -> dict[str, str]:
     return values
 
 
-def _env_value(key: str, dotenv: dict[str, str], default: str) -> str:
+def env_value(key: str, dotenv: dict[str, str], default: str) -> str:
     return os.environ.get(key, dotenv.get(key, default))
 
 
@@ -40,21 +40,21 @@ class AppSettings:
 
     @classmethod
     def from_env(cls, dotenv_path: Path | None = None) -> AppSettings:
-        dotenv = _read_dotenv(dotenv_path or Path(".env"))
+        dotenv = read_dotenv(dotenv_path or Path(".env"))
         return cls(
-            app_name=_env_value("OPSGUARD_APP_NAME", dotenv, "opsguard"),
-            environment=_env_value("OPSGUARD_ENVIRONMENT", dotenv, "development"),
-            log_level=_env_value("OPSGUARD_LOG_LEVEL", dotenv, "INFO").upper(),
-            data_dir=Path(_env_value("OPSGUARD_DATA_DIR", dotenv, "datasets")),
+            app_name=env_value("OPSGUARD_APP_NAME", dotenv, "opsguard"),
+            environment=env_value("OPSGUARD_ENVIRONMENT", dotenv, "development"),
+            log_level=env_value("OPSGUARD_LOG_LEVEL", dotenv, "INFO").upper(),
+            data_dir=Path(env_value("OPSGUARD_DATA_DIR", dotenv, "datasets")),
             reports_dir=Path(
-                _env_value("OPSGUARD_REPORTS_DIR", dotenv, "reports/generated")
+                env_value("OPSGUARD_REPORTS_DIR", dotenv, "reports/generated")
             ),
-            model_provider=_env_value("CHAT_MODEL_PROVIDER", dotenv, ""),
-            model_name=_env_value("GPT_MODEL_NAME", dotenv, ""),
-            postgres_url=_env_value("POSTGRES_URL", dotenv, ""),
-            redis_url=_env_value("REDIS_URL", dotenv, ""),
-            opensearch_url=_env_value("OPENSEARCH_URL", dotenv, ""),
-            neo4j_uri=_env_value("NEO4J_URI", dotenv, ""),
+            model_provider=env_value("CHAT_MODEL_PROVIDER", dotenv, ""),
+            model_name=env_value("GPT_MODEL_NAME", dotenv, ""),
+            postgres_url=env_value("POSTGRES_URL", dotenv, ""),
+            redis_url=env_value("REDIS_URL", dotenv, ""),
+            opensearch_url=env_value("OPENSEARCH_URL", dotenv, ""),
+            neo4j_uri=env_value("NEO4J_URI", dotenv, ""),
         )
 
     def ensure_runtime_dirs(self) -> None:

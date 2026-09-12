@@ -25,6 +25,7 @@ The slice covers three data sources and three scenarios:
 - `src/opsguard/rules`: constrained Sigma generation and offline replay validation;
 - `src/opsguard/governance`: approval, response, canary, rollback, and audit controls;
 - `src/opsguard/feedback`: version-isolated analyst feedback and candidate optimization;
+- `src/opsguard/llm`: validated model planning and redacted LangSmith tracing;
 - `src/opsguard/web`: FastAPI endpoints and the local security operations workspace;
 - `src/opsguard/tools`: allow-listed read/validate/simulate tools;
 - `datasets/`: deterministic fixtures for normal and suspicious behavior;
@@ -43,9 +44,16 @@ conda run -n opsguard python -m pip install -e ".[dev]"
 conda run -n opsguard python -m uvicorn opsguard.web.app:app --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000`. The workspace automatically runs a fixture-backed
-investigation and supports investigation, evidence review, human approval, canary
-evaluation, feedback capture, and offline candidate comparison.
+Open `http://127.0.0.1:8000`. Submit the included fixture-backed question to run an
+investigation, then review evidence, approve a response, evaluate canary metrics,
+capture feedback, and compare candidate rules. Real model mode requires an explicit
+submit action so loading or refreshing the page never consumes model tokens.
+
+Real model planning is optional. Copy the non-secret fields from `.env.example`, set
+`OPSGUARD_LLM_ENABLED=true`, and configure an OpenAI-compatible provider. When
+`LANGSMITH_TRACING=true`, OpsGuard records model, latency, token usage, validation
+status, and Trace IDs in LangSmith. Trace inputs and outputs are always hidden; only
+sanitized operational metadata leaves the application.
 
 The same demonstration can run in Docker:
 
@@ -58,13 +66,19 @@ PostgreSQL, Redis, OpenSearch, and Neo4j are optional adapter targets in the
 
 ## Safety boundary
 
-Agents may investigate and generate candidates automatically. Publishing a rule or performing a response action requires validation and explicit approval. The initial response tools are simulations only; they do not isolate a real host, disable an account, or block a real domain.
+The LLM may propose a structured investigation scope and advisory tool sequence, but
+the deterministic allow-listed workflow performs detection, rule validation, approval,
+and lifecycle transitions. Publishing a rule or performing a response action requires
+validation and explicit approval. Response tools are simulations only; they do not
+isolate a real host, disable an account, or block a real domain.
 
 ## Status
 
-M0-M9 are implemented: typed fixtures, normalization and retrieval, deterministic
+M0-M10 are implemented: typed fixtures, normalization and retrieval, deterministic
 anomaly detection, behavior graph correlation, evidence-based ATT&CK mapping, and an
 auditable multi-agent investigation workflow with Sigma generation and sandbox
 validation. Human-gated simulated response, canary evaluation, automatic rollback,
 append-only auditing, version-isolated feedback optimization, a FastAPI API, and a
-responsive operations workspace are included.
+responsive operations workspace are included. An optional OpenAI-compatible Planner
+adds schema-validated model reasoning, deterministic fallback, token/latency telemetry,
+and privacy-preserving LangSmith traces.

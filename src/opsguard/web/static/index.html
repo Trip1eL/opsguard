@@ -19,7 +19,7 @@
       </div>
       <div class="header-status">
         <span class="health-dot" aria-hidden="true"></span>
-        <span>本地演示环境</span>
+        <span id="runtime-status">本地演示环境</span>
       </div>
     </header>
 
@@ -75,6 +75,7 @@
 
         <nav class="view-tabs" aria-label="调查视图">
           <button type="button" class="tab active" data-tab="overview">调查总览</button>
+          <button type="button" class="tab" data-tab="agent">Agent 观测</button>
           <button type="button" class="tab" data-tab="graph">行为图谱</button>
           <button type="button" class="tab" data-tab="rule">检测规则</button>
           <button type="button" class="tab" data-tab="governance">审批治理</button>
@@ -95,6 +96,25 @@
                 <div><span>知识映射</span><h2>MITRE ATT&amp;CK</h2></div>
               </div>
               <div id="attack-list" class="attack-list empty-state">暂无技术映射</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-agent" class="tab-view">
+          <div class="agent-grid">
+            <section class="surface">
+              <div class="section-heading">
+                <div><span>结构化规划</span><h2>调查计划</h2></div>
+                <span id="agent-mode" class="status-badge neutral">未运行</span>
+              </div>
+              <div id="agent-plan" class="agent-panel empty-state">暂无 Agent 计划</div>
+            </section>
+            <section class="surface">
+              <div class="section-heading">
+                <div><span>LangSmith</span><h2>模型调用与 Trace</h2></div>
+                <span id="trace-status" class="status-badge neutral">未调用</span>
+              </div>
+              <div id="model-observability" class="agent-panel empty-state">暂无模型调用</div>
             </section>
           </div>
         </section>

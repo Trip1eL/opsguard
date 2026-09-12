@@ -27,10 +27,13 @@ def test_health_and_workspace_are_available() -> None:
             "service": "opsguard",
         }
         response = client.get("/")
+        model_status = client.get("/api/model/status")
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "OpsGuard" in response.text
+    assert model_status.status_code == 200
+    assert model_status.json()["enabled"] is False
 
 
 def test_ssh_investigation_requires_separate_human_approval() -> None:

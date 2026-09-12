@@ -21,6 +21,12 @@ from opsguard.feedback import (
     FeedbackKind,
     FeedbackRecord,
 )
+from opsguard.llm import (
+    InvestigationPlanner,
+    ModelPlanningError,
+    ModelRuntimeStatus,
+    PlanningResult,
+)
 from opsguard.repositories import JsonlEventRepository
 
 INVESTIGATION_PARAMETER_ALLOWLIST = {
@@ -49,8 +55,18 @@ class StoredInvestigation:
 
 
 class OpsGuardService:
-    def __init__(self, project_root: Path) -> None:
+    def __init__(
+        self,
+        project_root: Path,
+        planner: InvestigationPlanner | None = None,
+        model_status: ModelRuntimeStatus | None = None,
+    ) -> None:
         self.project_root = project_root
+        self.planner = planner
+        self.model_runtime_status = model_status or ModelRuntimeStatus(
+            enabled=False,
+            configured=False,
+        )
         manifest = load_manifest(project_root / "datasets" / "manifest.json")
         self.records: list[DatasetRecord] = [
             record
@@ -81,14 +97,59 @@ class OpsGuardService:
             raise ValueError(
                 f"unsupported investigation parameters: {sorted(unsupported)}"
             )
+        effective_parameters = dict(parameters)
+        agent_plan: dict[str, Any] = {
+            "mode": "deterministic",
+            "policy": "fixed allow-listed workflow",
+        }
+        model_observability = self._empty_model_observability()
+        if self.planner is not None:
+            try:
+                planning = self.planner.plan(question, dict(parameters))
+            except Exception as exc:  # noqa: BLE001
+                agent_plan = {
+                    "mode": "deterministic_fallback",
+                    "policy": "fixed allow-listed workflow",
+                    "error": self._safe_model_error(exc),
+                }
+                model_observability["fallback_used"] = True
+            else:
+                planned_parameters = planning.plan.execution_parameters()
+                unsupported_planned = (
+                    set(planned_parameters) - INVESTIGATION_PARAMETER_ALLOWLIST
+                )
+                if unsupported_planned:
+                    raise ModelPlanningError(
+                        "validated model plan produced unsupported parameters"
+                    )
+                effective_parameters = {
+                    **planned_parameters,
+                    **parameters,
+                }
+                agent_plan = {
+                    "mode": "llm",
+                    "plan": planning.plan.model_dump(mode="json"),
+                    "policy": (
+                        "model proposes scope; deterministic allow-listed "
+                        "workflow executes"
+                    ),
+                    "applied_parameters": planned_parameters,
+                }
+                model_observability = self._model_observability(planning)
+
         investigation_id = str(uuid4())
         report = self.orchestrator.run(
-            InvestigationRequest(question=question, parameters=parameters)
+            InvestigationRequest(
+                question=question,
+                parameters=effective_parameters,
+            )
         ).to_dict()
+        report["agent_plan"] = agent_plan
+        report["model_observability"] = model_observability
         stored = StoredInvestigation(
             investigation_id=investigation_id,
             question=question,
-            parameters=dict(parameters),
+            parameters=effective_parameters,
             report=report,
         )
         self.investigations[investigation_id] = stored
@@ -123,12 +184,18 @@ class OpsGuardService:
         }
         if approved and canary_metrics is not None:
             parameters["canary_metrics"] = canary_metrics
+        agent_plan = stored.report.get("agent_plan")
+        model_observability = stored.report.get("model_observability")
         stored.report = self.orchestrator.run(
             InvestigationRequest(
                 question=stored.question,
                 parameters=parameters,
             )
         ).to_dict()
+        if agent_plan is not None:
+            stored.report["agent_plan"] = agent_plan
+        if model_observability is not None:
+            stored.report["model_observability"] = model_observability
         return self.serialize(stored)
 
     def add_feedback(
@@ -194,6 +261,44 @@ class OpsGuardService:
             }
             for record in self.records
         ]
+
+    def model_status(self) -> dict[str, Any]:
+        return self.model_runtime_status.model_dump(mode="json")
+
+    def _empty_model_observability(self) -> dict[str, Any]:
+        return {
+            **self.model_status(),
+            "calls": [],
+            "total_latency_ms": 0.0,
+            "total_tokens": 0,
+            "validation_attempts": 0,
+            "validation_errors": [],
+            "fallback_used": False,
+        }
+
+    def _model_observability(
+        self,
+        planning: PlanningResult,
+    ) -> dict[str, Any]:
+        calls = [call.model_dump(mode="json") for call in planning.calls]
+        return {
+            **self.model_status(),
+            "calls": calls,
+            "total_latency_ms": sum(call.latency_ms for call in planning.calls),
+            "total_tokens": sum(
+                call.total_tokens or 0 for call in planning.calls
+            ),
+            "validation_attempts": planning.validation_attempts,
+            "validation_errors": planning.validation_errors,
+            "fallback_used": False,
+        }
+
+    @staticmethod
+    def _safe_model_error(exc: Exception) -> str:
+        if isinstance(exc, ModelPlanningError):
+            message = str(exc).replace("\n", " ").strip()
+            return f"ModelPlanningError: {message[:300]}"
+        return f"{type(exc).__name__}: external model planning failed"
 
     @staticmethod
     def _scope_id(report: dict[str, Any]) -> str:

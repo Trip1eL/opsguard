@@ -3,6 +3,7 @@ const state = {
   events: [],
   selectedIndex: 0,
   evolution: null,
+  modelStatus: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -119,9 +120,127 @@ function render() {
   renderMetricBand(evidence, governance, mappings, ruleValidation);
   renderTimeline(evidence.events || [], behavior);
   renderAttack(mappings);
+  renderAgent(report);
   renderGraph(behavior);
   renderRule(ruleValidation);
   renderGovernance(governance);
+}
+
+function safeTraceUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:" && url.hostname.endsWith("langchain.com")) {
+      return url.href;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function renderRuntimeStatus() {
+  const status = state.modelStatus;
+  if (!status?.enabled) {
+    byId("runtime-status").textContent = "确定性本地模式";
+    return;
+  }
+  if (!status.configured) {
+    byId("runtime-status").textContent = "模型配置不可用";
+    return;
+  }
+  byId("runtime-status").textContent = status.tracing_enabled
+    ? `${status.model} · LangSmith`
+    : `${status.model} · 未追踪`;
+}
+
+function renderAgent(report) {
+  const wrapper = report.agent_plan || { mode: "deterministic" };
+  const plan = wrapper.plan;
+  const observability = report.model_observability || {};
+  const calls = observability.calls || [];
+  const latest = calls.at(-1);
+  const modeLabels = {
+    llm: "LLM 已规划",
+    deterministic: "确定性",
+    deterministic_fallback: "已降级",
+  };
+  const modeBadge = byId("agent-mode");
+  modeBadge.textContent = modeLabels[wrapper.mode] || wrapper.mode;
+  modeBadge.className = `status-badge ${
+    wrapper.mode === "llm"
+      ? "success"
+      : wrapper.mode === "deterministic_fallback"
+        ? "warning"
+        : "neutral"
+  }`;
+
+  if (!plan) {
+    byId("agent-plan").className = "agent-panel";
+    byId("agent-plan").innerHTML = `
+      <div class="plan-objective">
+        <span>执行模式</span>
+        <strong>${escapeHtml(wrapper.policy || "固定白名单调查工作流")}</strong>
+      </div>
+      <dl class="agent-detail">
+        <div><dt>状态</dt><dd>${escapeHtml(modeLabels[wrapper.mode] || wrapper.mode)}</dd></div>
+        ${wrapper.error ? `<div><dt>降级原因</dt><dd>${escapeHtml(wrapper.error)}</dd></div>` : ""}
+      </dl>`;
+  } else {
+    const tools = (plan.tool_sequence || [])
+      .map((tool) => `<span class="tool-step">${escapeHtml(tool)}</span>`)
+      .join("");
+    const filters = Object.keys(wrapper.applied_parameters || {}).length
+      ? JSON.stringify(wrapper.applied_parameters)
+      : "无额外过滤条件";
+    byId("agent-plan").className = "agent-panel";
+    byId("agent-plan").innerHTML = `
+      <div class="plan-objective">
+        <span>调查目标</span>
+        <strong>${escapeHtml(plan.objective)}</strong>
+      </div>
+      <dl class="agent-detail">
+        <div><dt>关注实体</dt><dd>${escapeHtml((plan.focus_entities || []).join(" · ") || "未限定")}</dd></div>
+        <div><dt>执行参数</dt><dd><code>${escapeHtml(filters)}</code></dd></div>
+        <div><dt>建议工具链</dt><dd><div class="tool-sequence">${tools}</div></dd></div>
+        <div><dt>规划摘要</dt><dd>${escapeHtml(plan.reasoning_summary)}</dd></div>
+        <div><dt>执行策略</dt><dd>${escapeHtml(wrapper.policy)}</dd></div>
+      </dl>`;
+  }
+
+  const traceBadge = byId("trace-status");
+  traceBadge.textContent = latest?.traced ? "Trace 已写入" : calls.length ? "未追踪" : "未调用";
+  traceBadge.className = `status-badge ${latest?.traced ? "success" : calls.length ? "warning" : "neutral"}`;
+  if (!calls.length) {
+    byId("model-observability").className = "agent-panel";
+    byId("model-observability").innerHTML = `
+      <div class="plan-objective">
+        <span>模型状态</span>
+        <strong>${escapeHtml(observability.configured ? "已配置，当前调查未调用" : "确定性模式")}</strong>
+      </div>
+      <dl class="agent-detail">
+        <div><dt>降级</dt><dd>${observability.fallback_used ? "是" : "否"}</dd></div>
+        <div><dt>Trace 项目</dt><dd>${escapeHtml(observability.tracing_project || "--")}</dd></div>
+      </dl>`;
+    return;
+  }
+  const traceUrl = safeTraceUrl(latest.trace_url);
+  byId("model-observability").className = "agent-panel";
+  byId("model-observability").innerHTML = `
+    <div class="telemetry-grid">
+      <div class="telemetry-item"><span>模型</span><strong>${escapeHtml(latest.model)}</strong></div>
+      <div class="telemetry-item"><span>调用次数</span><strong>${calls.length}</strong></div>
+      <div class="telemetry-item"><span>总 Token</span><strong>${escapeHtml(observability.total_tokens)}</strong></div>
+      <div class="telemetry-item"><span>总耗时</span><strong>${Number(observability.total_latency_ms).toFixed(0)} ms</strong></div>
+    </div>
+    <dl class="agent-detail">
+      <div><dt>Provider</dt><dd>${escapeHtml(latest.provider)}</dd></div>
+      <div><dt>结构校验</dt><dd>${escapeHtml(observability.validation_attempts)} 次 · ${observability.validation_errors?.length || 0} 个错误</dd></div>
+      <div><dt>Trace 项目</dt><dd>${escapeHtml(observability.tracing_project)}</dd></div>
+    </dl>
+    <div class="trace-detail">
+      <code>${escapeHtml(latest.trace_id || "无 Trace ID")}</code>
+      ${traceUrl ? `<a href="${escapeHtml(traceUrl)}" target="_blank" rel="noreferrer">在 LangSmith 中查看 Trace</a>` : ""}
+    </div>`;
 }
 
 function renderCases(alerts, governanceItems) {
@@ -530,6 +649,12 @@ function bindStaticEvents() {
 async function initialize() {
   bindStaticEvents();
   try {
+    state.modelStatus = await api("/api/model/status");
+    renderRuntimeStatus();
+  } catch (error) {
+    toast(error.message);
+  }
+  try {
     state.events = await api("/api/events");
     byId("feedback-event").innerHTML = state.events
       .map(
@@ -542,7 +667,9 @@ async function initialize() {
   } catch (error) {
     toast(error.message);
   }
-  await runInvestigation(byId("question").value);
+  if (!state.modelStatus?.enabled) {
+    await runInvestigation(byId("question").value);
+  }
 }
 
 initialize();
