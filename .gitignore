@@ -3,10 +3,10 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+tests/.tmp/
 .ruff_cache/
 dist/
 build/
 *.egg-info/
 data/runtime/
 reports/generated/
-

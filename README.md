@@ -26,6 +26,7 @@ The slice covers three data sources and three scenarios:
 - `src/opsguard/governance`: approval, response, canary, rollback, and audit controls;
 - `src/opsguard/feedback`: version-isolated analyst feedback and candidate optimization;
 - `src/opsguard/llm`: validated model planning and redacted LangSmith tracing;
+- `src/opsguard/evals`: versioned Agent evaluation, red-team scoring, and release gates;
 - `src/opsguard/web`: FastAPI endpoints and the local security operations workspace;
 - `src/opsguard/tools`: allow-listed read/validate/simulate tools;
 - `datasets/`: deterministic fixtures for normal and suspicious behavior;
@@ -72,13 +73,23 @@ and lifecycle transitions. Publishing a rule or performing a response action req
 validation and explicit approval. Response tools are simulations only; they do not
 isolate a real host, disable an account, or block a real domain.
 
+Run the free, deterministic Agent evaluation suite with:
+
+```powershell
+conda run -n opsguard python -m opsguard.evals run --mode fixture
+```
+
+The sanitized JSON and Markdown reports are written to `reports/evals/`. Live mode
+uses the configured gateway, caps each run at 20 cases and stops at the Token budget.
+
 ## Status
 
-M0-M10 are implemented: typed fixtures, normalization and retrieval, deterministic
+M0-M11 are implemented: typed fixtures, normalization and retrieval, deterministic
 anomaly detection, behavior graph correlation, evidence-based ATT&CK mapping, and an
 auditable multi-agent investigation workflow with Sigma generation and sandbox
 validation. Human-gated simulated response, canary evaluation, automatic rollback,
 append-only auditing, version-isolated feedback optimization, a FastAPI API, and a
 responsive operations workspace are included. An optional OpenAI-compatible Planner
 adds schema-validated model reasoning, deterministic fallback, token/latency telemetry,
-and privacy-preserving LangSmith traces.
+and privacy-preserving LangSmith traces. A 20-case Agent evaluation suite adds normal,
+adversarial, and model-failure regression coverage with explicit security release gates.
