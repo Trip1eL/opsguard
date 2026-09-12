@@ -33,6 +33,7 @@ def _jsonable(value: Any) -> Any:
 
 class InvestigationStatus(StrEnum):
     COMPLETED = "completed"
+    AWAITING_APPROVAL = "awaiting_approval"
     PARTIAL = "partial"
     FAILED = "failed"
 

@@ -11,8 +11,17 @@ from opsguard.data.fixtures import DatasetRecord
 from opsguard.detection import DetectionEngine
 from opsguard.domain.cases import Alert
 from opsguard.domain.models import BehaviorChain, DetectionRule, Event
+from opsguard.governance import (
+    ApprovalDecision,
+    CanaryMetrics,
+    GovernanceCoordinator,
+)
 from opsguard.repositories import EventQuery, EventRepository
-from opsguard.rules import OfflineRuleSandbox, SigmaRuleGenerator
+from opsguard.rules import (
+    OfflineRuleSandbox,
+    RuleValidationReport,
+    SigmaRuleGenerator,
+)
 
 from .tools import EmptyToolResultError, ToolRegistry, ToolSpec
 
@@ -44,6 +53,7 @@ class InvestigationToolbox:
         rule_generator: SigmaRuleGenerator | None = None,
         rule_sandbox: OfflineRuleSandbox | None = None,
         validation_dataset: str = "opsguard-fixtures",
+        governance: GovernanceCoordinator | None = None,
     ) -> None:
         self.repository = repository
         self.attack_mapper = attack_mapper
@@ -53,6 +63,7 @@ class InvestigationToolbox:
         self.rule_generator = rule_generator or SigmaRuleGenerator()
         self.rule_sandbox = rule_sandbox or OfflineRuleSandbox()
         self.validation_dataset = validation_dataset
+        self.governance = governance or GovernanceCoordinator()
 
     def registry(self) -> ToolRegistry:
         return ToolRegistry(
@@ -61,6 +72,12 @@ class InvestigationToolbox:
                     "search_events",
                     "Search normalized security events with structured filters.",
                     self.search_events,
+                    _validate_list_output,
+                ),
+                ToolSpec(
+                    "govern_policy_and_response",
+                    "Assess risk and enforce approval, canary, and response controls.",
+                    self.govern_policy_and_response,
                     _validate_list_output,
                 ),
                 ToolSpec(
@@ -205,10 +222,75 @@ class InvestigationToolbox:
                 self.validation_dataset,
                 set(item["event_ids"]),
             )
-            results.append(report.model_dump(mode="json"))
+            result = report.model_dump(mode="json")
+            result.update(
+                {
+                    "chain_id": item["chain_id"],
+                    "event_ids": item["event_ids"],
+                }
+            )
+            results.append(result)
         if not results:
             raise EmptyToolResultError("validation requires candidate rules")
         return results
+
+    def govern_policy_and_response(
+        self,
+        payload: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        events = self._events(payload)
+        alerts = [Alert.model_validate(item) for item in payload.get("alerts", [])]
+        mappings = {
+            item["chain"]["case_id"]: item
+            for item in payload.get("attack_mappings", [])
+        }
+        results = []
+        for item in payload.get("rule_validations", []):
+            chain_id = item["chain_id"]
+            mapping = mappings[chain_id]
+            chain = BehaviorChain.model_validate(mapping["chain"])
+            chain_alerts = [
+                alert for alert in alerts if alert.alert_id == mapping["alert_id"]
+            ]
+            approval_payload = self._scoped_parameter(
+                payload.get("approvals", payload.get("approval")),
+                chain_id,
+            )
+            metrics_payload = self._scoped_parameter(
+                payload.get("canary_metrics"),
+                chain_id,
+            )
+            outcome = self.governance.govern(
+                chain_alerts,
+                chain,
+                events,
+                RuleValidationReport.model_validate(item),
+                (
+                    ApprovalDecision.model_validate(approval_payload)
+                    if approval_payload
+                    else None
+                ),
+                (
+                    CanaryMetrics.model_validate(metrics_payload)
+                    if metrics_payload
+                    else None
+                ),
+            )
+            results.append(outcome.model_dump(mode="json"))
+        if not results:
+            raise EmptyToolResultError("governance requires validation results")
+        return results
+
+    @staticmethod
+    def _scoped_parameter(value: Any, scope_id: str) -> Any:
+        if isinstance(value, list):
+            return next(
+                (item for item in value if item.get("scope_id") == scope_id),
+                None,
+            )
+        if isinstance(value, dict) and scope_id in value:
+            return value[scope_id]
+        return value
 
     @staticmethod
     def _events(payload: Mapping[str, Any]) -> list[Event]:

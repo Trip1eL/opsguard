@@ -68,6 +68,12 @@ DEFAULT_STEPS: tuple[AgentStep, ...] = (
         input_keys=("candidate_rules",),
         output_key="rule_validations",
     ),
+    AgentStep(
+        "response",
+        "govern_policy_and_response",
+        input_keys=("events", "alerts", "attack_mappings", "rule_validations"),
+        output_key="governance",
+    ),
 )
 
 
@@ -109,6 +115,9 @@ class InvestigationOrchestrator:
             state[step.output_key] = value
             report.evidence[step.output_key] = value
 
+        governance = report.evidence.get("governance", [])
+        if any(item.get("status") == "awaiting_approval" for item in governance):
+            report.status = InvestigationStatus.AWAITING_APPROVAL
         report.summary = self._summarize(report)
         return report
 
@@ -186,9 +195,13 @@ class InvestigationOrchestrator:
             item.get("result", {}).get("passed", False)
             for item in evidence.get("rule_validations", [])
         )
+        governance_states = sorted(
+            {item.get("status", "unknown") for item in evidence.get("governance", [])}
+        )
+        governance_summary = ",".join(governance_states) or "not_started"
         return (
             f"Investigation {report.status.value}: {events} event(s), "
             f"{alerts} alert(s), {chains} behavior chain(s), "
             f"{len(techniques)} ATT&CK technique(s), {rules} candidate rule(s), "
-            f"{passed_rules} validated."
+            f"{passed_rules} validated, governance={governance_summary}."
         )

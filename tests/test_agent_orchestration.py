@@ -62,6 +62,11 @@ def _mock_registry() -> ToolRegistry:
                 "validate Sigma candidates",
                 lambda _: [{"result": {"passed": True}}],
             ),
+            ToolSpec(
+                "govern_policy_and_response",
+                "apply governance controls",
+                lambda _: [{"status": "active"}],
+            ),
         ]
     )
 
@@ -95,10 +100,11 @@ def test_workflow_produces_auditable_evidence_chain() -> None:
     assert report.status == InvestigationStatus.COMPLETED
     assert report.evidence["events"][0]["event_id"] == "e1"
     assert report.evidence["coverage"][0]["coverage_ratio"] == 1.0
-    assert len(report.tool_calls) == 7
+    assert len(report.tool_calls) == 8
     assert all(call.status == "completed" for call in report.tool_calls)
     assert "1 ATT&CK technique(s)" in report.summary
     assert "1 candidate rule(s), 1 validated" in report.summary
+    assert "governance=active" in report.summary
 
 
 def test_unknown_tool_stops_without_retrying() -> None:
@@ -168,7 +174,7 @@ def test_fixture_workflow_answers_ssh_question_end_to_end() -> None:
         )
     )
 
-    assert report.status == InvestigationStatus.COMPLETED
+    assert report.status == InvestigationStatus.AWAITING_APPROVAL
     assert len(report.evidence["alerts"]) == 1
     chain = report.evidence["attack_mappings"][0]["chain"]
     technique_ids = {item["technique_id"] for item in chain["mappings"]}
@@ -176,8 +182,45 @@ def test_fixture_workflow_answers_ssh_question_end_to_end() -> None:
     assert report.evidence["coverage"][0]["coverage_ratio"] == 1.0
     assert report.evidence["rule_validations"][0]["result"]["passed"] is True
     assert report.evidence["rule_validations"][0]["rule"]["status"] == "validated"
+    assert report.evidence["governance"][0]["status"] == "awaiting_approval"
+    assert report.evidence["governance"][0]["response_executions"] == []
     assert all(call.status == "completed" for call in report.tool_calls)
     json.dumps(report.to_dict(), ensure_ascii=False)
+
+
+def test_fixture_workflow_activates_only_with_explicit_approval() -> None:
+    scope_id = "case-for-alert-suspicious_login-evt-ssh-001"
+    report = _fixture_orchestrator().run(
+        InvestigationRequest(
+            "调查新来源 SSH 登录后的可疑行为",
+            parameters={
+                "approval": {
+                    "approval_id": "approval-ssh-001",
+                    "scope_id": scope_id,
+                    "actor": "soc-lead",
+                    "approved": True,
+                    "reason": "evidence and validation reviewed",
+                    "created_at": "2026-09-12T10:00:00+08:00",
+                },
+                "canary_metrics": {
+                    "evaluated_events": 1000,
+                    "false_positive_rate": 0.01,
+                    "error_rate": 0.001,
+                    "p95_latency_ms": 30,
+                },
+            },
+        )
+    )
+
+    governance = report.evidence["governance"][0]
+    assert report.status == InvestigationStatus.COMPLETED
+    assert governance["status"] == "active"
+    assert governance["rule"]["status"] == "active"
+    assert len(governance["response_executions"]) == 3
+    assert any(
+        record["action"] == "canary_evaluated"
+        for record in governance["audit_records"]
+    )
 
 
 def test_empty_event_query_is_reported_without_downstream_calls() -> None:
