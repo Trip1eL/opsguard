@@ -56,4 +56,3 @@ class Workflow:
         self.state = target
         self.history.append(target)
         return self.state
-

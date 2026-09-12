@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from collections.abc import Sequence
+from typing import Protocol
 
 from opsguard.domain.models import (
     BehaviorChain,
@@ -29,4 +30,3 @@ class DetectionEngineer(Protocol):
 
 class RuleValidator(Protocol):
     def validate(self, rule: DetectionRule, dataset: str) -> ValidationResult: ...
-

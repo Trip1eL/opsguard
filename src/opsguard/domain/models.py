@@ -86,4 +86,3 @@ class Approval(BaseModel):
     approved: bool
     reason: str
     created_at: datetime
-

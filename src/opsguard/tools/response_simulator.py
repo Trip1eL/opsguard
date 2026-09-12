@@ -27,4 +27,3 @@ class ResponseSimulator:
     def block_domain(self, domain: str) -> str:
         self.state.blocked_domains.add(domain)
         return f"simulated domain block: {domain}"
-

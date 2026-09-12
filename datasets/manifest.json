@@ -1,0 +1,9 @@
+{
+  "version": "2026-09-12",
+  "description": "Deterministic OpsGuard M1 fixtures with normalized events and evaluation labels.",
+  "cases": [
+    {"case_id":"case-ssh-persistence-001","scenario":"suspicious_ssh_persistence","label":"suspicious","file":"suspicious/ssh_persistence.jsonl","expected_stages":["initial_access","execution","persistence"]},
+    {"case_id":"case-web-child-process-001","scenario":"web_unusual_child_process","label":"suspicious","file":"attack_scenarios/web_child_process.jsonl","expected_stages":["execution","command_and_control"]},
+    {"case_id":"case-release-window-001","scenario":"normal_release_window","label":"benign","file":"normal/release_window.jsonl","expected_stages":["正常运维"]}
+  ]
+}
