@@ -34,5 +34,7 @@ Agents may investigate and generate candidates automatically. Publishing a rule 
 
 ## Status
 
-The repository currently contains the project scaffold and typed workflow contracts. The implementation will be completed incrementally, with each milestone backed by fixtures and tests. See [`docs/resume.md`](docs/resume.md) for resume wording that matches the actual implementation stage.
-
+M0-M6 are implemented: typed fixtures, normalization and retrieval, deterministic
+anomaly detection, behavior graph correlation, evidence-based ATT&CK mapping, and an
+auditable multi-agent investigation workflow. Each milestone is backed by isolated
+tests; M7 will add detection-rule generation and sandbox validation.
