@@ -11,7 +11,7 @@ sample logs -> normalized events -> behavior timeline -> ATT&CK mapping
             -> Sigma candidate -> isolated validation -> approval -> simulated response
 ```
 
-The slice will cover three data sources and three scenarios:
+The slice covers three data sources and three scenarios:
 
 - Linux SSH/audit events, web access logs, and process/network events;
 - suspicious login plus scheduled-task persistence;
@@ -24,11 +24,37 @@ The slice will cover three data sources and three scenarios:
 - `src/opsguard/agents`: narrow agent contracts and orchestration boundaries;
 - `src/opsguard/rules`: constrained Sigma generation and offline replay validation;
 - `src/opsguard/governance`: approval, response, canary, rollback, and audit controls;
+- `src/opsguard/feedback`: version-isolated analyst feedback and candidate optimization;
+- `src/opsguard/web`: FastAPI endpoints and the local security operations workspace;
 - `src/opsguard/tools`: allow-listed read/validate/simulate tools;
 - `datasets/`: deterministic fixtures for normal and suspicious behavior;
 - `docs/`: architecture notes and resume material.
 
-The initial scaffold deliberately keeps model calls, storage adapters, and external side effects behind interfaces. This makes the workflow testable with deterministic fixtures before connecting a model or real log backend.
+Model calls, storage adapters, and external side effects remain behind interfaces. The
+demonstration uses deterministic fixtures and in-memory state so the complete workflow
+is reproducible without production access.
+
+## Run the workspace
+
+Install the package in the dedicated Conda environment and start the API:
+
+```powershell
+conda run -n opsguard python -m pip install -e ".[dev]"
+conda run -n opsguard python -m uvicorn opsguard.web.app:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000`. The workspace automatically runs a fixture-backed
+investigation and supports investigation, evidence review, human approval, canary
+evaluation, feedback capture, and offline candidate comparison.
+
+The same demonstration can run in Docker:
+
+```powershell
+docker compose up --build api
+```
+
+PostgreSQL, Redis, OpenSearch, and Neo4j are optional adapter targets in the
+`adapters` profile; the local M9 workflow does not require them.
 
 ## Safety boundary
 
@@ -36,8 +62,9 @@ Agents may investigate and generate candidates automatically. Publishing a rule 
 
 ## Status
 
-M0-M8 are implemented: typed fixtures, normalization and retrieval, deterministic
+M0-M9 are implemented: typed fixtures, normalization and retrieval, deterministic
 anomaly detection, behavior graph correlation, evidence-based ATT&CK mapping, and an
 auditable multi-agent investigation workflow with Sigma generation and sandbox
 validation. Human-gated simulated response, canary evaluation, automatic rollback,
-and append-only auditing are included. M9 will add the feedback loop, API, and UI.
+append-only auditing, version-isolated feedback optimization, a FastAPI API, and a
+responsive operations workspace are included.

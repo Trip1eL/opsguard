@@ -24,7 +24,11 @@ SUPPORTED_FIELDS = {
     "src_ip",
     "user",
 }
-SUPPORTED_MODIFIERS = {"contains", "endswith", "startswith"}
+SUPPORTED_MODIFIERS = {"contains", "endswith", "exists", "startswith"}
+SUPPORTED_CONDITIONS = {
+    "1 of selection_*",
+    "1 of selection_* and not 1 of filter_*",
+}
 
 TECHNIQUE_SELECTIONS: dict[str, dict[str, Any]] = {
     "T1021.004": {
@@ -65,6 +69,7 @@ class SigmaDocument(BaseModel):
     rule_id: str
     logsource: dict[str, Any]
     selections: dict[str, dict[str, Any]]
+    filters: dict[str, dict[str, Any]] = Field(default_factory=dict)
     condition: str
     tags: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -157,23 +162,34 @@ class SigmaRuleValidator:
         if not isinstance(detection, dict):
             raise SigmaValidationError("detection must be an object")
         condition = detection.get("condition")
-        if condition != "1 of selection_*":
+        if condition not in SUPPORTED_CONDITIONS:
             raise SigmaValidationError(
-                "only the condition '1 of selection_*' is supported"
+                "condition is outside the supported Sigma subset"
             )
         selections = {
             name: value
             for name, value in detection.items()
-            if name != "condition"
+            if name.startswith("selection_")
         }
+        filters = {
+            name: value
+            for name, value in detection.items()
+            if name.startswith("filter_")
+        }
+        known_names = {"condition", *selections, *filters}
+        unknown_names = set(detection) - known_names
+        if unknown_names:
+            raise SigmaValidationError(
+                f"unsupported detection blocks: {sorted(unknown_names)}"
+            )
         if not selections:
             raise SigmaValidationError("at least one selection is required")
-        for name, selection in selections.items():
-            if not name.startswith("selection_") or not isinstance(selection, dict):
-                raise SigmaValidationError(f"invalid selection: {name}")
-            if not selection:
-                raise SigmaValidationError(f"selection must not be empty: {name}")
-            for expression, expected in selection.items():
+        if condition.endswith("filter_*") and not filters:
+            raise SigmaValidationError("filter condition requires at least one filter")
+        for name, block in {**selections, **filters}.items():
+            if not isinstance(block, dict) or not block:
+                raise SigmaValidationError(f"invalid or empty detection block: {name}")
+            for expression, expected in block.items():
                 self._validate_expression(expression, expected)
 
         return SigmaDocument(
@@ -181,6 +197,7 @@ class SigmaRuleValidator:
             rule_id=str(document["id"]),
             logsource=document["logsource"],
             selections=selections,
+            filters=filters,
             condition=condition,
             tags=document.get("tags", []),
             metadata=document.get("x_opsguard", {}),
@@ -196,6 +213,8 @@ class SigmaRuleValidator:
             raise SigmaValidationError(f"field is not allow-listed: {field}")
         if separator and modifier not in SUPPORTED_MODIFIERS:
             raise SigmaValidationError(f"modifier is not supported: {modifier}")
+        if modifier == "exists" and not isinstance(expected, bool):
+            raise SigmaValidationError("exists modifier requires a boolean value")
         values = expected if isinstance(expected, list) else [expected]
         if not values or any(
             not isinstance(value, (str, int, float, bool)) for value in values
@@ -210,10 +229,15 @@ class CompiledSigmaRule:
     document: SigmaDocument
 
     def matches(self, event: Event) -> bool:
-        return any(
+        selected = any(
             all(_matches_expression(event, expression, expected) for expression, expected in selection.items())
             for selection in self.document.selections.values()
         )
+        filtered = any(
+            all(_matches_expression(event, expression, expected) for expression, expected in item.items())
+            for item in self.document.filters.values()
+        )
+        return selected and not filtered
 
 
 class SigmaRuleMatcher:
@@ -228,6 +252,8 @@ def _matches_expression(event: Event, expression: str, expected: Any) -> bool:
     field, _, modifier = expression.partition("|")
     actual = _field_value(event, field)
     candidates = expected if isinstance(expected, list) else [expected]
+    if modifier == "exists":
+        return _field_exists(event, field) is expected
     if modifier == "contains":
         return actual is not None and any(
             str(candidate) in str(actual) for candidate in candidates
@@ -248,3 +274,9 @@ def _field_value(event: Event, field: str) -> Any:
         return event.attributes.get(field.split(".", maxsplit=1)[1])
     value = getattr(event, field)
     return value.value if hasattr(value, "value") else value
+
+
+def _field_exists(event: Event, field: str) -> bool:
+    if field.startswith("attributes."):
+        return field.split(".", maxsplit=1)[1] in event.attributes
+    return getattr(event, field) is not None

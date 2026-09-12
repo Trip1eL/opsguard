@@ -8,18 +8,24 @@ version = "0.1.0"
 description = "A controllable multi-agent workflow for production anomaly investigation."
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.109,<1",
     "pydantic>=2.7,<3",
     "PyYAML>=6.0,<7",
+    "uvicorn>=0.27,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "httpx>=0.27,<0.28",
     "pytest>=8.0",
     "ruff>=0.6",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"opsguard.web" = ["static/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

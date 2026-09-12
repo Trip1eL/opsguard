@@ -8,11 +8,12 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY datasets ./datasets
+COPY knowledge ./knowledge
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
 
 EXPOSE 8000
 
-CMD ["python", "-m", "http.server", "8000", "--directory", "/app"]
-
+CMD ["python", "-m", "uvicorn", "opsguard.web.app:app", "--host", "0.0.0.0", "--port", "8000"]

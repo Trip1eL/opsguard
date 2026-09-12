@@ -169,7 +169,7 @@ def test_validator_rejects_non_allowlisted_fields_and_conditions() -> None:
         content=yaml.safe_dump(document),
     )
 
-    with pytest.raises(SigmaValidationError, match="only the condition"):
+    with pytest.raises(SigmaValidationError, match="outside the supported"):
         SigmaRuleValidator().parse(rule)
 
     document["detection"]["condition"] = "1 of selection_*"

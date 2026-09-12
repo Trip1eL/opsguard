@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>OpsGuard 安全调查工作台</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">O</span>
+        <div>
+          <strong>OpsGuard</strong>
+          <span>安全调查与检测治理</span>
+        </div>
+      </div>
+      <div class="header-status">
+        <span class="health-dot" aria-hidden="true"></span>
+        <span>本地演示环境</span>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="case-rail" aria-label="调查队列">
+        <div class="rail-heading">
+          <h2>调查队列</h2>
+          <span id="case-count">0</span>
+        </div>
+        <div id="case-list" class="case-list">
+          <div class="case-skeleton"></div>
+          <div class="case-skeleton"></div>
+        </div>
+        <div class="source-summary">
+          <h3>数据源</h3>
+          <dl>
+            <div><dt>Linux Audit</dt><dd>3</dd></div>
+            <div><dt>Web Access</dt><dd>3</dd></div>
+            <div><dt>Process / Network</dt><dd>3</dd></div>
+          </dl>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section class="query-band" aria-labelledby="workspace-title">
+          <div class="workspace-title-row">
+            <div>
+              <h1 id="workspace-title">事件调查</h1>
+              <p id="investigation-id">等待调查</p>
+            </div>
+            <span id="report-status" class="status-badge neutral">未运行</span>
+          </div>
+          <form id="investigation-form" class="query-form">
+            <label for="question" class="sr-only">调查问题</label>
+            <input
+              id="question"
+              name="question"
+              value="调查新来源 SSH 登录后的可疑行为"
+              autocomplete="off"
+              maxlength="500"
+            >
+            <button type="submit" class="primary-command">开始调查</button>
+          </form>
+        </section>
+
+        <section id="metric-band" class="metric-band" aria-label="调查摘要">
+          <div class="metric"><span>事件</span><strong>--</strong><small>检索范围</small></div>
+          <div class="metric"><span>告警</span><strong>--</strong><small>相关结果</small></div>
+          <div class="metric"><span>风险</span><strong>--</strong><small>行为评分</small></div>
+          <div class="metric"><span>ATT&amp;CK</span><strong>--</strong><small>技术映射</small></div>
+          <div class="metric"><span>规则</span><strong>--</strong><small>生命周期</small></div>
+        </section>
+
+        <nav class="view-tabs" aria-label="调查视图">
+          <button type="button" class="tab active" data-tab="overview">调查总览</button>
+          <button type="button" class="tab" data-tab="graph">行为图谱</button>
+          <button type="button" class="tab" data-tab="rule">检测规则</button>
+          <button type="button" class="tab" data-tab="governance">审批治理</button>
+          <button type="button" class="tab" data-tab="feedback">反馈飞轮</button>
+        </nav>
+
+        <section id="view-overview" class="tab-view active">
+          <div class="overview-grid">
+            <section class="surface timeline-surface">
+              <div class="section-heading">
+                <div><span>证据链</span><h2>行为时间线</h2></div>
+                <span id="timeline-count" class="section-count">0 个节点</span>
+              </div>
+              <div id="timeline" class="timeline empty-state">暂无调查数据</div>
+            </section>
+            <section class="surface attack-surface">
+              <div class="section-heading">
+                <div><span>知识映射</span><h2>MITRE ATT&amp;CK</h2></div>
+              </div>
+              <div id="attack-list" class="attack-list empty-state">暂无技术映射</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-graph" class="tab-view">
+          <section class="surface">
+            <div class="section-heading">
+              <div><span>关联分析</span><h2>行为阶段与实体关系</h2></div>
+              <span id="graph-meta" class="section-count">0 节点 / 0 边</span>
+            </div>
+            <div id="behavior-graph" class="behavior-graph empty-state">暂无行为图</div>
+          </section>
+        </section>
+
+        <section id="view-rule" class="tab-view">
+          <div class="rule-grid">
+            <section class="surface rule-code-surface">
+              <div class="section-heading">
+                <div><span>Sigma</span><h2 id="rule-title">候选检测规则</h2></div>
+                <span id="rule-version" class="status-badge neutral">--</span>
+              </div>
+              <pre id="rule-content" class="rule-code">暂无候选规则</pre>
+            </section>
+            <section class="surface">
+              <div class="section-heading">
+                <div><span>离线沙箱</span><h2>验证指标</h2></div>
+              </div>
+              <div id="validation-metrics" class="validation-grid empty-state">暂无验证结果</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-governance" class="tab-view">
+          <div class="governance-grid">
+            <section class="surface">
+              <div class="section-heading">
+                <div><span>响应策略</span><h2>风险与处置建议</h2></div>
+                <span id="risk-badge" class="status-badge neutral">--</span>
+              </div>
+              <div id="response-plan" class="response-plan empty-state">暂无响应提案</div>
+            </section>
+            <section class="surface approval-surface">
+              <div class="section-heading">
+                <div><span>人工控制点</span><h2>审批与灰度</h2></div>
+                <span id="governance-status" class="status-badge neutral">--</span>
+              </div>
+              <form id="decision-form" class="control-form">
+                <div class="form-row">
+                  <label>审批人<input id="approval-actor" value="soc-lead" required></label>
+                  <label>审批理由<input id="approval-reason" value="已核验证据与验证指标" required></label>
+                </div>
+                <fieldset>
+                  <legend>灰度指标</legend>
+                  <div class="metric-inputs">
+                    <label>事件数<input id="canary-events" type="number" min="1" value="1000"></label>
+                    <label>误报率<input id="canary-fpr" type="number" min="0" max="1" step="0.01" value="0.01"></label>
+                    <label>错误率<input id="canary-errors" type="number" min="0" max="1" step="0.001" value="0.001"></label>
+                    <label>P95 ms<input id="canary-latency" type="number" min="0" step="1" value="30"></label>
+                  </div>
+                </fieldset>
+                <div class="command-row">
+                  <button type="button" id="deny-button" class="secondary-command">拒绝</button>
+                  <button type="submit" class="primary-command">批准并灰度</button>
+                </div>
+              </form>
+              <div id="audit-stream" class="audit-stream empty-state">暂无审计记录</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-feedback" class="tab-view">
+          <div class="feedback-grid">
+            <section class="surface">
+              <div class="section-heading">
+                <div><span>人工标注</span><h2>事件反馈</h2></div>
+              </div>
+              <form id="feedback-form" class="control-form">
+                <label>事件<select id="feedback-event" required></select></label>
+                <fieldset>
+                  <legend>反馈类型</legend>
+                  <div class="segmented">
+                    <label><input type="radio" name="feedback-kind" value="true_positive">真阳性</label>
+                    <label><input type="radio" name="feedback-kind" value="false_positive">误报</label>
+                    <label><input type="radio" name="feedback-kind" value="false_negative" checked>漏报</label>
+                  </div>
+                </fieldset>
+                <label>分析员<input id="feedback-actor" value="soc-analyst" required></label>
+                <label>结论<textarea id="feedback-comment" rows="3" required>已结合原始事件完成复核</textarea></label>
+                <div class="command-row">
+                  <button type="button" id="evolve-button" class="secondary-command">生成候选版本</button>
+                  <button type="submit" class="primary-command">提交反馈</button>
+                </div>
+              </form>
+            </section>
+            <section class="surface">
+              <div class="section-heading">
+                <div><span>版本评估</span><h2>新旧规则对比</h2></div>
+                <span id="recommendation-badge" class="status-badge neutral">未生成</span>
+              </div>
+              <div id="evolution-result" class="evolution-result empty-state">暂无候选版本</div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="busy-layer" class="busy-layer" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <span>正在执行调查链</span>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

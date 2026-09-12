@@ -13,21 +13,14 @@ services:
       NEO4J_URI: bolt://neo4j:7687
     ports:
       - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      opensearch:
-        condition: service_healthy
-      neo4j:
-        condition: service_started
     volumes:
       - ./src:/app/src:ro
       - ./datasets:/app/datasets:ro
+      - ./knowledge:/app/knowledge:ro
       - ./reports:/app/reports
 
   postgres:
+    profiles: ["adapters"]
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-opsguard}
@@ -44,6 +37,7 @@ services:
       retries: 10
 
   redis:
+    profiles: ["adapters"]
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -51,6 +45,7 @@ services:
       - redis_data:/data
 
   opensearch:
+    profiles: ["adapters"]
     image: opensearchproject/opensearch:2.16.0
     environment:
       discovery.type: single-node
@@ -68,6 +63,7 @@ services:
       retries: 20
 
   neo4j:
+    profiles: ["adapters"]
     image: neo4j:5-community
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-change-me}
@@ -86,4 +82,3 @@ volumes:
   opensearch_data:
   neo4j_data:
   neo4j_logs:
-
