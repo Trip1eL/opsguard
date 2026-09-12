@@ -22,6 +22,7 @@ The slice will cover three data sources and three scenarios:
 
 - `src/opsguard/domain`: typed domain models and lifecycle states;
 - `src/opsguard/agents`: narrow agent contracts and orchestration boundaries;
+- `src/opsguard/rules`: constrained Sigma generation and offline replay validation;
 - `src/opsguard/tools`: allow-listed read/validate/simulate tools;
 - `datasets/`: deterministic fixtures for normal and suspicious behavior;
 - `docs/`: architecture notes and resume material.
@@ -34,7 +35,8 @@ Agents may investigate and generate candidates automatically. Publishing a rule 
 
 ## Status
 
-M0-M6 are implemented: typed fixtures, normalization and retrieval, deterministic
+M0-M7 are implemented: typed fixtures, normalization and retrieval, deterministic
 anomaly detection, behavior graph correlation, evidence-based ATT&CK mapping, and an
-auditable multi-agent investigation workflow. Each milestone is backed by isolated
-tests; M7 will add detection-rule generation and sandbox validation.
+auditable multi-agent investigation workflow with Sigma generation and sandbox
+validation. Each milestone is backed by isolated tests; M8 will add approval, canary,
+rollback, and response lifecycle controls.

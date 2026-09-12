@@ -56,6 +56,18 @@ DEFAULT_STEPS: tuple[AgentStep, ...] = (
         input_keys=("attack_mappings",),
         output_key="coverage",
     ),
+    AgentStep(
+        "detection_engineering",
+        "generate_detection_rules",
+        input_keys=("attack_mappings",),
+        output_key="candidate_rules",
+    ),
+    AgentStep(
+        "validation",
+        "validate_detection_rules",
+        input_keys=("candidate_rules",),
+        output_key="rule_validations",
+    ),
 )
 
 
@@ -169,8 +181,14 @@ class InvestigationOrchestrator:
             for item in evidence.get("attack_mappings", [])
             for mapping in item.get("chain", {}).get("mappings", [])
         }
+        rules = len(evidence.get("candidate_rules", []))
+        passed_rules = sum(
+            item.get("result", {}).get("passed", False)
+            for item in evidence.get("rule_validations", [])
+        )
         return (
             f"Investigation {report.status.value}: {events} event(s), "
             f"{alerts} alert(s), {chains} behavior chain(s), "
-            f"{len(techniques)} ATT&CK technique(s)."
+            f"{len(techniques)} ATT&CK technique(s), {rules} candidate rule(s), "
+            f"{passed_rules} validated."
         )

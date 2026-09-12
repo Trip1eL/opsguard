@@ -12,7 +12,7 @@ from opsguard.agents import (
     ToolSpec,
 )
 from opsguard.attack import AttackTechniqueMapper, TechniqueCatalog
-from opsguard.data import load_manifest
+from opsguard.data import load_dataset, load_manifest
 from opsguard.repositories import JsonlEventRepository
 
 ROOT = Path(__file__).parents[1]
@@ -52,6 +52,16 @@ def _mock_registry() -> ToolRegistry:
                 "calculate coverage",
                 lambda _: [{"coverage_ratio": 1.0}],
             ),
+            ToolSpec(
+                "generate_detection_rules",
+                "generate Sigma candidates",
+                lambda _: [{"rule": {"rule_id": "r1"}}],
+            ),
+            ToolSpec(
+                "validate_detection_rules",
+                "validate Sigma candidates",
+                lambda _: [{"result": {"passed": True}}],
+            ),
         ]
     )
 
@@ -61,10 +71,19 @@ def _fixture_orchestrator() -> InvestigationOrchestrator:
     repository = JsonlEventRepository(
         [ROOT / "datasets" / item["file"] for item in manifest.cases]
     )
+    records = [
+        record
+        for item in manifest.cases
+        for record in load_dataset(ROOT / "datasets" / item["file"])
+    ]
     catalog = TechniqueCatalog.from_json(
         ROOT / "knowledge" / "attack" / "techniques.json"
     )
-    toolbox = InvestigationToolbox(repository, AttackTechniqueMapper(catalog))
+    toolbox = InvestigationToolbox(
+        repository,
+        AttackTechniqueMapper(catalog),
+        validation_records=records,
+    )
     return InvestigationOrchestrator(toolbox.registry())
 
 
@@ -76,9 +95,10 @@ def test_workflow_produces_auditable_evidence_chain() -> None:
     assert report.status == InvestigationStatus.COMPLETED
     assert report.evidence["events"][0]["event_id"] == "e1"
     assert report.evidence["coverage"][0]["coverage_ratio"] == 1.0
-    assert len(report.tool_calls) == 5
+    assert len(report.tool_calls) == 7
     assert all(call.status == "completed" for call in report.tool_calls)
     assert "1 ATT&CK technique(s)" in report.summary
+    assert "1 candidate rule(s), 1 validated" in report.summary
 
 
 def test_unknown_tool_stops_without_retrying() -> None:
@@ -154,6 +174,8 @@ def test_fixture_workflow_answers_ssh_question_end_to_end() -> None:
     technique_ids = {item["technique_id"] for item in chain["mappings"]}
     assert {"T1021.004", "T1053.003", "T1105"} <= technique_ids
     assert report.evidence["coverage"][0]["coverage_ratio"] == 1.0
+    assert report.evidence["rule_validations"][0]["result"]["passed"] is True
+    assert report.evidence["rule_validations"][0]["rule"]["status"] == "validated"
     assert all(call.status == "completed" for call in report.tool_calls)
     json.dumps(report.to_dict(), ensure_ascii=False)
 

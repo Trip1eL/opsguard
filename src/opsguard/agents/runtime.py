@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from opsguard.attack import AttackTechniqueMapper
 from opsguard.correlation import BehaviorCorrelator
+from opsguard.data.fixtures import DatasetRecord
 from opsguard.detection import DetectionEngine
 from opsguard.domain.cases import Alert
-from opsguard.domain.models import BehaviorChain, Event
+from opsguard.domain.models import BehaviorChain, DetectionRule, Event
 from opsguard.repositories import EventQuery, EventRepository
+from opsguard.rules import OfflineRuleSandbox, SigmaRuleGenerator
 
 from .tools import EmptyToolResultError, ToolRegistry, ToolSpec
 
@@ -38,11 +40,19 @@ class InvestigationToolbox:
         attack_mapper: AttackTechniqueMapper,
         detection_engine: DetectionEngine | None = None,
         correlator: BehaviorCorrelator | None = None,
+        validation_records: Iterable[DatasetRecord] = (),
+        rule_generator: SigmaRuleGenerator | None = None,
+        rule_sandbox: OfflineRuleSandbox | None = None,
+        validation_dataset: str = "opsguard-fixtures",
     ) -> None:
         self.repository = repository
         self.attack_mapper = attack_mapper
         self.detection_engine = detection_engine or DetectionEngine()
         self.correlator = correlator or BehaviorCorrelator()
+        self.validation_records = list(validation_records)
+        self.rule_generator = rule_generator or SigmaRuleGenerator()
+        self.rule_sandbox = rule_sandbox or OfflineRuleSandbox()
+        self.validation_dataset = validation_dataset
 
     def registry(self) -> ToolRegistry:
         return ToolRegistry(
@@ -75,6 +85,18 @@ class InvestigationToolbox:
                     "get_detection_coverage",
                     "Measure requested ATT&CK technique coverage for each chain.",
                     self.get_detection_coverage,
+                    _validate_list_output,
+                ),
+                ToolSpec(
+                    "generate_detection_rules",
+                    "Generate versioned Sigma candidates from mapped behavior.",
+                    self.generate_detection_rules,
+                    _validate_list_output,
+                ),
+                ToolSpec(
+                    "validate_detection_rules",
+                    "Replay Sigma candidates in the isolated fixture sandbox.",
+                    self.validate_detection_rules,
                     _validate_list_output,
                 ),
             ]
@@ -146,6 +168,46 @@ class InvestigationToolbox:
             results.append(coverage.model_dump(mode="json"))
         if not results:
             raise EmptyToolResultError("coverage requires ATT&CK mapping results")
+        return results
+
+    def generate_detection_rules(
+        self,
+        payload: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        version = int(payload.get("rule_version", 1))
+        results = []
+        for item in payload.get("attack_mappings", []):
+            chain = BehaviorChain.model_validate(item["chain"])
+            rule = self.rule_generator.generate(chain, version)
+            results.append(
+                {
+                    "chain_id": chain.case_id,
+                    "event_ids": chain.event_ids,
+                    "rule": rule.model_dump(mode="json"),
+                }
+            )
+        if not results:
+            raise EmptyToolResultError("rule generation requires ATT&CK mappings")
+        return results
+
+    def validate_detection_rules(
+        self,
+        payload: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        if not self.validation_records:
+            raise EmptyToolResultError("no labeled records are available for validation")
+        results = []
+        for item in payload.get("candidate_rules", []):
+            rule = DetectionRule.model_validate(item["rule"])
+            report = self.rule_sandbox.replay(
+                rule,
+                self.validation_records,
+                self.validation_dataset,
+                set(item["event_ids"]),
+            )
+            results.append(report.model_dump(mode="json"))
+        if not results:
+            raise EmptyToolResultError("validation requires candidate rules")
         return results
 
     @staticmethod
