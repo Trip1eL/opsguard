@@ -7,12 +7,13 @@ from opsguard.repositories.events import (
     JsonlEventRepository,
     RepositoryError,
 )
+from opsguard.repositories.opensearch import OpenSearchEventRepository
 
 __all__ = [
     "EventQuery",
     "EventRepository",
     "InMemoryEventRepository",
     "JsonlEventRepository",
+    "OpenSearchEventRepository",
     "RepositoryError",
 ]
-

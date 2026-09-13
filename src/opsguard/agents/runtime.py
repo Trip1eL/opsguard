@@ -7,6 +7,7 @@ from typing import Any
 
 from opsguard.attack import AttackTechniqueMapper
 from opsguard.correlation import BehaviorCorrelator
+from opsguard.correlation.graph import BehaviorGraphStore
 from opsguard.data.fixtures import DatasetRecord
 from opsguard.detection import DetectionEngine
 from opsguard.domain.cases import Alert
@@ -18,6 +19,7 @@ from opsguard.governance import (
 )
 from opsguard.repositories import EventQuery, EventRepository
 from opsguard.rules import (
+    DockerRuleSandbox,
     OfflineRuleSandbox,
     RuleValidationReport,
     SigmaRuleGenerator,
@@ -49,16 +51,17 @@ class InvestigationToolbox:
         attack_mapper: AttackTechniqueMapper,
         detection_engine: DetectionEngine | None = None,
         correlator: BehaviorCorrelator | None = None,
+        graph_store: BehaviorGraphStore | None = None,
         validation_records: Iterable[DatasetRecord] = (),
         rule_generator: SigmaRuleGenerator | None = None,
-        rule_sandbox: OfflineRuleSandbox | None = None,
+        rule_sandbox: OfflineRuleSandbox | DockerRuleSandbox | None = None,
         validation_dataset: str = "opsguard-fixtures",
         governance: GovernanceCoordinator | None = None,
     ) -> None:
         self.repository = repository
         self.attack_mapper = attack_mapper
         self.detection_engine = detection_engine or DetectionEngine()
-        self.correlator = correlator or BehaviorCorrelator()
+        self.correlator = correlator or BehaviorCorrelator(graph_store=graph_store)
         self.validation_records = list(validation_records)
         self.rule_generator = rule_generator or SigmaRuleGenerator()
         self.rule_sandbox = rule_sandbox or OfflineRuleSandbox()

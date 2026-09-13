@@ -21,13 +21,13 @@ The slice covers three data sources and three scenarios:
 ## Architecture
 
 - `src/opsguard/domain`: typed domain models and lifecycle states;
-- `src/opsguard/agents`: narrow agent contracts and orchestration boundaries;
-- `src/opsguard/rules`: constrained Sigma generation and offline replay validation;
+- `src/opsguard/agents`: LangGraph execution adapter, narrow agent contracts, and orchestration boundaries;
+- `src/opsguard/rules`: constrained Sigma generation, offline replay, and Docker-isolated validation worker;
 - `src/opsguard/governance`: approval, response, canary, rollback, and audit controls;
 - `src/opsguard/feedback`: version-isolated analyst feedback and candidate optimization;
 - `src/opsguard/llm`: validated model planning and redacted LangSmith tracing;
 - `src/opsguard/evals`: versioned Agent evaluation, red-team scoring, and release gates;
-- `src/opsguard/web`: FastAPI endpoints and the local security operations workspace;
+- `src/opsguard/web`: FastAPI endpoints, backend selection, and the local security operations workspace;
 - `src/opsguard/tools`: allow-listed read/validate/simulate tools;
 - `datasets/`: deterministic fixtures for normal and suspicious behavior;
 - `docs/`: architecture notes and resume material.
@@ -67,6 +67,24 @@ docker compose up --build api
 PostgreSQL, Redis, OpenSearch, and Neo4j are optional adapter targets in the
 `adapters` profile; the local M9 workflow does not require them.
 
+The real storage and graph adapters can be enabled without changing the analysis
+workflow:
+
+```dotenv
+OPSGUARD_EVENT_BACKEND=opensearch
+OPSGUARD_GRAPH_BACKEND=neo4j
+OPSGUARD_RULE_SANDBOX=docker
+OPSGUARD_SANDBOX_IMAGE=opsguard:latest
+```
+
+`OpenSearchEventRepository` writes normalized events with an explicit index mapping and
+structured term/range filters. `Neo4jBehaviorGraphAdapter` uses the official Driver for
+graph upsert and neighborhood queries. `DockerRuleSandbox` runs the restricted Sigma
+replay worker with `--network none`, read-only root filesystem, dropped capabilities,
+no-new-privileges, PID, memory, CPU, and timeout limits. JSONL/in-memory storage,
+in-memory graph, and the process-local replay sandbox remain the default fallback for
+the dependency-free demo and CI.
+
 ## Safety boundary
 
 The LLM may propose a structured investigation scope and advisory tool sequence, but
@@ -90,12 +108,14 @@ evaluation report as an artifact.
 
 ## Status
 
-M0-M11 are implemented: typed fixtures, normalization and retrieval, deterministic
-anomaly detection, behavior graph correlation, evidence-based ATT&CK mapping, and an
-auditable multi-agent investigation workflow with Sigma generation and sandbox
+M0-M13 are implemented: typed fixtures, normalization and retrieval, deterministic
+anomaly detection, behavior graph correlation, evidence-based ATT&CK mapping, and a
+LangGraph-backed auditable multi-agent investigation workflow with Sigma generation and
+container-isolated sandbox
 validation. Human-gated simulated response, canary evaluation, automatic rollback,
 append-only auditing, version-isolated feedback optimization, a FastAPI API, and a
-responsive operations workspace are included. An optional OpenAI-compatible Planner
+responsive operations workspace are included. OpenSearch and Neo4j adapters provide
+real backend boundaries while retaining local fallbacks. An optional OpenAI-compatible Planner
 adds schema-validated model reasoning, deterministic fallback, token/latency telemetry,
 and privacy-preserving LangSmith traces. A 20-case Agent evaluation suite adds normal,
 adversarial, and model-failure regression coverage with explicit security release gates.

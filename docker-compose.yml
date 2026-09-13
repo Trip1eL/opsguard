@@ -11,6 +11,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       OPENSEARCH_URL: http://opensearch:9200
       NEO4J_URI: bolt://neo4j:7687
+      OPSGUARD_EVENT_BACKEND: jsonl
+      OPSGUARD_GRAPH_BACKEND: memory
+      OPSGUARD_RULE_SANDBOX: offline
     ports:
       - "8000:8000"
     volumes:

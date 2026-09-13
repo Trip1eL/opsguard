@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,8 +13,11 @@ from opsguard.agents import (
     InvestigationOrchestrator,
     InvestigationRequest,
     InvestigationToolbox,
+    LangGraphInvestigationOrchestrator,
 )
 from opsguard.attack import AttackTechniqueMapper, TechniqueCatalog
+from opsguard.config import read_dotenv
+from opsguard.correlation.graph import BehaviorGraphStore, Neo4jBehaviorGraphAdapter
 from opsguard.data import DatasetRecord, load_dataset, load_manifest
 from opsguard.domain.models import DetectionRule
 from opsguard.feedback import (
@@ -27,7 +31,12 @@ from opsguard.llm import (
     ModelRuntimeStatus,
     PlanningResult,
 )
-from opsguard.repositories import JsonlEventRepository
+from opsguard.repositories import (
+    EventRepository,
+    JsonlEventRepository,
+    OpenSearchEventRepository,
+)
+from opsguard.rules import DockerRuleSandbox, OfflineRuleSandbox
 
 INVESTIGATION_PARAMETER_ALLOWLIST = {
     "action",
@@ -60,8 +69,13 @@ class OpsGuardService:
         project_root: Path,
         planner: InvestigationPlanner | None = None,
         model_status: ModelRuntimeStatus | None = None,
+        event_repository: EventRepository | None = None,
+        rule_sandbox: DockerRuleSandbox | OfflineRuleSandbox | None = None,
+        graph_store: BehaviorGraphStore | None = None,
+        use_langgraph: bool = True,
     ) -> None:
         self.project_root = project_root
+        self._dotenv = read_dotenv(project_root / ".env")
         self.planner = planner
         self.model_runtime_status = model_status or ModelRuntimeStatus(
             enabled=False,
@@ -73,7 +87,7 @@ class OpsGuardService:
             for item in manifest.cases
             for record in load_dataset(project_root / "datasets" / item["file"])
         ]
-        repository = JsonlEventRepository.from_dataset_records(self.records)
+        repository = event_repository or self._build_event_repository()
         catalog = TechniqueCatalog.from_json(
             project_root / "knowledge" / "attack" / "techniques.json"
         )
@@ -81,10 +95,78 @@ class OpsGuardService:
             repository,
             AttackTechniqueMapper(catalog),
             validation_records=self.records,
+            rule_sandbox=rule_sandbox or self._build_rule_sandbox(),
+            graph_store=graph_store or self._build_graph_store(),
         )
-        self.orchestrator = InvestigationOrchestrator(toolbox.registry())
+        registry = toolbox.registry()
+        self.orchestrator = (
+            LangGraphInvestigationOrchestrator(registry)
+            if use_langgraph
+            else InvestigationOrchestrator(registry)
+        )
         self.flywheel = FeedbackFlywheel()
         self.investigations: dict[str, StoredInvestigation] = {}
+
+    def _value(self, name: str, default: str = "") -> str:
+        return os.environ.get(name, self._dotenv.get(name, default))
+
+    def _build_event_repository(self) -> EventRepository:
+        backend = self._value("OPSGUARD_EVENT_BACKEND", "jsonl").casefold()
+        if backend == "opensearch":
+            repository = OpenSearchEventRepository.from_url(
+                self._value("OPENSEARCH_URL"),
+                index=self._value("OPENSEARCH_INDEX", "opsguard-events"),
+                username=self._value("OPENSEARCH_USER") or None,
+                password=self._value("OPENSEARCH_PASSWORD") or None,
+                verify_certs=self._value("OPENSEARCH_VERIFY_CERTS", "true").casefold()
+                not in {"0", "false", "no"},
+            )
+            if self._value("OPSGUARD_OPENSEARCH_SEED_FIXTURES", "false").casefold() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }:
+                repository.add_many(record.event for record in self.records)
+            return repository
+        if backend != "jsonl":
+            raise ValueError(f"unsupported event backend: {backend}")
+        return JsonlEventRepository.from_dataset_records(self.records)
+
+    def _build_rule_sandbox(self) -> DockerRuleSandbox | OfflineRuleSandbox:
+        backend = self._value("OPSGUARD_RULE_SANDBOX", "offline").casefold()
+        if backend == "offline":
+            return OfflineRuleSandbox()
+        if backend == "docker":
+            return DockerRuleSandbox(
+                image=self._value("OPSGUARD_SANDBOX_IMAGE", "opsguard:latest"),
+                timeout_seconds=float(
+                    self._value("OPSGUARD_SANDBOX_TIMEOUT_SECONDS", "30")
+                ),
+            )
+        raise ValueError(f"unsupported rule sandbox: {backend}")
+
+    def _build_graph_store(self) -> BehaviorGraphStore | None:
+        backend = self._value("OPSGUARD_GRAPH_BACKEND", "memory").casefold()
+        if backend == "memory":
+            return None
+        if backend == "neo4j":
+            adapter = Neo4jBehaviorGraphAdapter.from_uri(
+                self._value("NEO4J_URI"),
+                self._value("NEO4J_USER", "neo4j"),
+                self._value("NEO4J_PASSWORD"),
+                encrypted=self._value("NEO4J_ENCRYPTED", "false").casefold()
+                in {"1", "true", "yes", "on"},
+            )
+            if self._value("OPSGUARD_NEO4J_VERIFY", "false").casefold() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }:
+                adapter.verify_connectivity()
+            return adapter
+        raise ValueError(f"unsupported graph backend: {backend}")
 
     def investigate(
         self,

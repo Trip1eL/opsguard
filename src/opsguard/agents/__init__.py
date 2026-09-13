@@ -1,5 +1,6 @@
 """Controlled multi-agent investigation contracts and orchestration."""
 
+from .langgraph import LangGraphInvestigationOrchestrator
 from .orchestrator import AgentStep, InvestigationOrchestrator
 from .runtime import InvestigationToolbox
 from .schemas import (
@@ -18,6 +19,7 @@ __all__ = [
     "InvestigationRequest",
     "InvestigationStatus",
     "InvestigationToolbox",
+    "LangGraphInvestigationOrchestrator",
     "ToolCallRecord",
     "ToolErrorCategory",
     "ToolRegistry",

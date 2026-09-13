@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from opsguard.correlation.graph import (
     BehaviorGraph,
+    BehaviorGraphStore,
     GraphEdge,
     GraphNode,
     GraphNodeKind,
@@ -37,8 +38,13 @@ class BehaviorCorrelator:
         ("process_start", "network_connect"): "LEADS_TO",
     }
 
-    def __init__(self, window: timedelta = timedelta(minutes=10)) -> None:
+    def __init__(
+        self,
+        window: timedelta = timedelta(minutes=10),
+        graph_store: BehaviorGraphStore | None = None,
+    ) -> None:
         self.window = window
+        self.graph_store = graph_store
 
     def correlate(self, alert: Alert, events: Iterable[Event]) -> CorrelationResult:
         all_events = sorted(events, key=lambda event: (event.timestamp, event.event_id))
@@ -52,6 +58,8 @@ class BehaviorCorrelator:
             if any(self._is_related(event, anchor) for anchor in anchor_events)
         ]
         graph = self._build_graph(related)
+        if self.graph_store is not None:
+            self.graph_store.upsert(graph)
         stages = list(
             dict.fromkeys(
                 self.stage_by_action[event.action]

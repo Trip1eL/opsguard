@@ -11,8 +11,15 @@ COPY src ./src
 COPY datasets ./datasets
 COPY knowledge ./knowledge
 
+RUN addgroup --system opsguard \
+    && adduser --system --ingroup opsguard opsguard \
+    && mkdir -p /run/opsguard/work \
+    && chown -R opsguard:opsguard /run/opsguard
+
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
+
+USER opsguard
 
 EXPOSE 8000
 

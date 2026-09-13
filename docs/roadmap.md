@@ -27,6 +27,7 @@
 | M9 | 反馈飞轮与展示层 | 反馈闭环、优化建议、API 和可视化 | M6-M8 |
 | M10 | 真实模型与可观测性 | 结构化 Planner、确定性降级、LangSmith Trace | M6、M9 |
 | M11 | Agent Eval 与安全红队 | 版本化用例、红队指标、预算控制、发布门禁 | M10 |
+| M13 | 真实技术栈适配 | LangGraph、OpenSearch、Neo4j、Docker 沙箱 | M11 |
 
 ## 模块定义与验收标准
 
@@ -134,3 +135,7 @@ M4 的 Neo4j、M6 的模型调用和 M9 的前端都可以先用 adapter 或 moc
 
 第五阶段完成 `M11`：用版本化 Agent Eval 和安全红队样例验证模型质量、系统韧性与
 安全边界，并把阈值固化为可自动执行的发布门禁。
+
+第六阶段完成 `M13`：将 LangGraph 接入默认调查编排，提供 OpenSearch 事件仓储、
+Neo4j 图存储和 Docker 规则回放 Worker；保留 JSONL/内存/进程内实现作为个人项目的
+可重复 fallback，并通过环境变量切换后端。

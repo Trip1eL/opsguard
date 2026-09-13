@@ -1,5 +1,6 @@
 """Sigma rule generation and isolated offline validation."""
 
+from .docker_sandbox import DockerRuleSandbox, DockerSandboxError
 from .models import (
     RuleValidationReport,
     ValidationSample,
@@ -14,6 +15,8 @@ from .sigma import (
 )
 
 __all__ = [
+    "DockerRuleSandbox",
+    "DockerSandboxError",
     "OfflineRuleSandbox",
     "RuleValidationReport",
     "SigmaRuleGenerator",

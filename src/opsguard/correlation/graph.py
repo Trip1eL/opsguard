@@ -55,9 +55,13 @@ class InMemoryBehaviorGraph:
     def related(self, node_id: str, relation: str | None = None) -> list[GraphNode]:
         related_ids: set[str] = set()
         for edge in self.edges.values():
-            if edge.source == node_id and (relation is None or edge.relation == relation):
+            if edge.source == node_id and (
+                relation is None or edge.relation == relation
+            ):
                 related_ids.add(edge.target)
-            if edge.target == node_id and (relation is None or edge.relation == relation):
+            if edge.target == node_id and (
+                relation is None or edge.relation == relation
+            ):
                 related_ids.add(edge.source)
         return [self.nodes[item] for item in sorted(related_ids) if item in self.nodes]
 
@@ -71,14 +75,48 @@ class Neo4jBehaviorGraphAdapter:
     def __init__(self, driver: Any | None = None) -> None:
         self.driver = driver
 
+    @classmethod
+    def from_uri(
+        cls,
+        uri: str,
+        username: str,
+        password: str,
+        *,
+        encrypted: bool = False,
+    ) -> Neo4jBehaviorGraphAdapter:
+        """Create a real Neo4j driver-backed adapter without importing the driver at module load."""
+        if not uri or not username or not password:
+            raise ValueError("Neo4j URI, username, and password are required")
+        try:
+            from neo4j import GraphDatabase
+        except (
+            ImportError
+        ) as exc:  # pragma: no cover - dependency is installed in release env
+            raise RuntimeError("neo4j driver is required for Neo4j adapter") from exc
+        driver = GraphDatabase.driver(
+            uri, auth=(username, password), encrypted=encrypted
+        )
+        return cls(driver)
+
+    def verify_connectivity(self) -> None:
+        if self.driver is None:
+            raise RuntimeError("Neo4j driver is required for connectivity verification")
+        self.driver.verify_connectivity()
+
+    def close(self) -> None:
+        if self.driver is not None:
+            self.driver.close()
+
     @staticmethod
     def build_statements(graph: BehaviorGraph) -> list[tuple[str, dict[str, Any]]]:
         statements: list[tuple[str, dict[str, Any]]] = []
         for node in graph.nodes:
             statements.append(
                 (
-                    ("MERGE (n:OpsGuardNode {node_id: $node_id}) "
-                    "SET n.kind = $kind, n.properties = $properties"),
+                    (
+                        "MERGE (n:OpsGuardNode {node_id: $node_id}) "
+                        "SET n.kind = $kind, n.properties = $properties"
+                    ),
                     {
                         "node_id": node.node_id,
                         "kind": node.kind.value,
@@ -89,10 +127,12 @@ class Neo4jBehaviorGraphAdapter:
         for edge in graph.edges:
             statements.append(
                 (
-                    ("MATCH (a:OpsGuardNode {node_id: $source}), "
-                    "(b:OpsGuardNode {node_id: $target}) "
-                    "MERGE (a)-[r:RELATED {relation: $relation}]->(b) "
-                    "SET r.event_ids = $event_ids, r.properties = $properties"),
+                    (
+                        "MATCH (a:OpsGuardNode {node_id: $source}), "
+                        "(b:OpsGuardNode {node_id: $target}) "
+                        "MERGE (a)-[r:RELATED {relation: $relation}]->(b) "
+                        "SET r.event_ids = $event_ids, r.properties = $properties"
+                    ),
                     {
                         "source": edge.source,
                         "target": edge.target,
@@ -127,7 +167,10 @@ class Neo4jBehaviorGraphAdapter:
         with self.driver.session() as session:
             rows = session.run(query, params)
             return [
-                GraphNode(node_id=row["node_id"], kind=row["kind"], properties=row["properties"])
+                GraphNode(
+                    node_id=row["node_id"],
+                    kind=row["kind"],
+                    properties=row["properties"],
+                )
                 for row in rows
             ]
-
