@@ -31,6 +31,8 @@ The slice covers three data sources and three scenarios:
 - `src/opsguard/tools`: allow-listed read/validate/simulate tools;
 - `datasets/`: deterministic fixtures for normal and suspicious behavior;
 - `docs/`: architecture notes and resume material.
+- `docs/architecture.md`: component responsibilities, data flow, and security boundaries;
+- `docs/demo.md`: a three-minute reproducible demonstration script;
 
 Model calls, storage adapters, and external side effects remain behind interfaces. The
 demonstration uses deterministic fixtures and in-memory state so the complete workflow
@@ -82,6 +84,10 @@ conda run -n opsguard python -m opsguard.evals run --mode fixture
 The sanitized JSON and Markdown reports are written to `reports/evals/`. Live mode
 uses the configured gateway, caps each run at 20 cases and stops at the Token budget.
 
+Every push and pull request to `main` runs the full test suite, Ruff, and the fixture Eval
+through [GitHub Actions](.github/workflows/ci.yml). The CI job uploads only the sanitized
+evaluation report as an artifact.
+
 ## Status
 
 M0-M11 are implemented: typed fixtures, normalization and retrieval, deterministic
@@ -93,3 +99,4 @@ responsive operations workspace are included. An optional OpenAI-compatible Plan
 adds schema-validated model reasoning, deterministic fallback, token/latency telemetry,
 and privacy-preserving LangSmith traces. A 20-case Agent evaluation suite adds normal,
 adversarial, and model-failure regression coverage with explicit security release gates.
+The `v0.1.0` release scope and verification checklist are recorded in `docs/release.md`.
